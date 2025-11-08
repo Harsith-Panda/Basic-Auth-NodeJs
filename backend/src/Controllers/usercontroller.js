@@ -21,7 +21,7 @@ const registerUser = async (req, res) => {
     where: { email: email },
   });
 
-  if (userExsist.length > 0) {
+  if (userExsist) {
     return res.status(400).json({ error: "Email already exists" });
   }
 
@@ -73,7 +73,7 @@ const loginUser = async (req, res) => {
     res.cookie("refresh", refreshToken, {
       httpOnly: true,
       sameSite: "strict",
-      path: "/refresh",
+      path: "/auth/refresh",
     });
 
     return res.status(200).json({ accessToken });
@@ -82,7 +82,54 @@ const loginUser = async (req, res) => {
   return res.status(401).json({ error: "Invalid password" });
 };
 
+const handleRefreshToken = async (req, res) => {
+  const cookie = req.cookies.refresh;
+  if (!cookie) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  jwt.verify(cookie, process.env.REFRESH_SECRET_KEY, (err, decoded) => {
+    if (err) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const payload = {
+      id: decoded.id,
+      email: decoded.email,
+    };
+
+    const accessToken = jwt.sign(payload, process.env.JWT_SECRET_KEY, {
+      expiresIn: "1m",
+    });
+    const refreshToken = jwt.sign(payload, process.env.REFRESH_SECRET_KEY, {
+      expiresIn: "1d",
+    });
+    console.log("access", accessToken);
+    console.log("refresh", refreshToken);
+
+    res.cookie("refresh", refreshToken, {
+      httpOnly: true,
+      sameSite: "strict",
+      path: "/auth/refresh",
+    });
+
+    return res.status(200).json({ accessToken });
+  });
+};
+
+const logoutHandler = async (req, res) => {
+  res.clearCookie("refresh", {
+    httpOnly: true,
+    sameSite: "strict",
+    path: "/auth/refresh",
+  });
+
+  return res.status(200).json({ message: "Logout successful" });
+};
+
 module.exports = {
   registerUser,
   loginUser,
+  handleRefreshToken,
+  logoutHandler,
 };
